@@ -1,31 +1,44 @@
 # llm-rag-foundations
+
 Study of the fundamentals of LLM and RAG.  
 It includes documentations and small exercises of each argument in its directory.
 
-## Topics
+## Table of Contents
+
+1. [Topics](#1-topics)
+   1. [Studying Links:](#11-studying-links)
+
+<br>
+
+## 1. Topics
+
 01_NLP_basics
-- NLP vs LLM   
+
+- NLP vs LLM
 - Tokenizer
-- Pipeline()  
-- Embedding  
+- Pipeline()
+- Embedding
 - Attention
 
-02_Trasformers  
-- architecture Encoder and Decoder  
--  
+02_Trasformers
 
-### Studying Links:
-**Transformers**   
-- https://web.stanford.edu/class/cs25/recordings/  
-- https://huggingface.co/learn/llm-course/chapter1/1  
+- architecture Encoder and Decoder
+-
 
-**FastAPI** https://fastapi.tiangolo.com/  
+### 1.1. Studying Links:
 
-SQLAlchemy, ORM per database SQL  
+**Transformers**
 
-**Sentence Trasformer** https://sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html  
+- https://web.stanford.edu/class/cs25/recordings/
+- https://huggingface.co/learn/llm-course/chapter1/1
+- https://poloclub.github.io/transformer-explainer/
 
-**Course projects** https://discuss.huggingface.co/c/course/20/l/latest  
+**FastAPI** https://fastapi.tiangolo.com/
 
-**Models from Hugging Face** https://huggingface.co/models  
+SQLAlchemy, ORM per database SQL
 
+**Sentence Trasformer** https://sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html
+
+**Course projects** https://discuss.huggingface.co/c/course/20/l/latest
+
+**Models from Hugging Face** https://huggingface.co/models
