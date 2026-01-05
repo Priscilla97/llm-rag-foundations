@@ -5,11 +5,13 @@
 1. [Intro](#1-intro)
 
 1. [HuggingFace](#2-huggingface)
+
    1. [Componenti principali:](#21-componenti-principali)
 
 1. [Tokenizer](#3-tokenizer)
 
 1. [Libreria "pipeline()"](#4-libreria-pipeline)
+
    1. [Different pipeline modalities](#41-different-pipeline-modalities)
 
 1. [Transformers](#5-transformers)
@@ -25,13 +27,21 @@
       1. [Multi-Head Self-Attention](#551-multi-head-self-attention)
       1. [Attention mechanisms](#552-attention-mechanisms)
       1. [MLP: Multi-Layer Perceptron](#553-mlp-multi-layer-perceptron)
-      1. [Output Probabilities](#554-output-probabilities)
-   1. [The original architecture](#56-the-original-architecture)
-   1. [Types of Language Models](#57-types-of-language-models)
-   1. [How Transformers solve tasks](#58-how-transformers-solve-tasks)
-   1. [BERT](#59-bert)
-   1. [Modern Large Language Models (LLMs)](#510-modern-large-language-models-llms)
-   1. [Sequence-to-sequence models](#511-sequence-to-sequence-models)
+   1. [Output Probabilities](#56-output-probabilities)
+      1. [Sampling](#561-sampling)
+      1. [Managing Repetition: Keeping Output Fresh](#562-managing-repetition-keeping-output-fresh)
+      1. [Controlling Generation Length: Setting Boundaries](#563-controlling-generation-length-setting-boundaries)
+      1. [Beam Search: Looking Ahead for Better Coherence](#564-beam-search-looking-ahead-for-better-coherence)
+   1. [The original architecture](#57-the-original-architecture)
+   1. [Practical Challenges and Optimization](#58-practical-challenges-and-optimization)
+      1. [Key Performance Metrics](#581-key-performance-metrics)
+      1. [The Context Length Challenge](#582-the-context-length-challenge)
+      1. [The KV Cache Optimization](#583-the-kv-cache-optimization)
+   1. [Types of Language Models](#59-types-of-language-models)
+   1. [How Transformers solve tasks](#510-how-transformers-solve-tasks)
+   1. [BERT](#511-bert)
+   1. [Modern Large Language Models (LLMs)](#512-modern-large-language-models-llms)
+   1. [Sequence-to-sequence models](#513-sequence-to-sequence-models)
 
 <br>
 
@@ -285,8 +295,8 @@ To convert a prompt into embedding, we need to
 
 1. tokenize the input,
 2. obtain token embeddings,
-3. add positional information, and finally
-4. add up token and position encodings to get the final embedding. Let’s see how each of these steps is done.
+3. add positional information,
+4. add up token and position encodings to get the final embedding.
 
 ![](LLM_theory_images/embedding.png "embedding")
 **Embedding layer view**, showing how the input prompt is converted to a vector representation. <br> The process involves (1) Tokenization, (2) Token Embedding, (3) Positional Encoding, and (4) Final Embedding.
@@ -424,7 +434,7 @@ Unlike the self-attention mechanism, which integrates information across tokens,
 
 [TOC](#table-of-contents)
 
-#### 5.5.4. Output Probabilities
+### 5.6. Output Probabilities
 
 After the input has been processed through all Transformer blocks, the output is passed through the final linear layer to prepare it for **token prediction**.
 
@@ -434,7 +444,13 @@ We then apply the **softmax function** to convert the logits into a probability 
 
 ![](LLM_theory_images/prob.png "Probabilities")
 
+#### 5.6.1. Sampling
+
 The final step is to generate the next token by sampling from this distribution.
+
+![](LLM_theory_images/Select_token.png)
+
+**Raw Logits**: Think of these as the model’s initial gut feelings about each possible next word
 
 The **temperature hyperparameter** plays a critical role in this process. Model output logits are simply divided by the temperature:
 
@@ -444,16 +460,58 @@ The **temperature hyperparameter** plays a critical role in this process. Model 
 
 In addition, the **sampling process** can be further refined using top-k and top-p parameters:
 
-- **top-k sampling**: Limits the candidate tokens to the top k tokens with the highest probabilities, filtering out less likely options.
+- **top-k sampling**: Limits the candidate tokens to the top k tokens with the highest probabilities, filtering out less likely options (eg 90%).
 - **top-p sampling**: Considers the smallest set of tokens whose cumulative probability exceeds a threshold p, ensuring that only the most likely tokens contribute while still allowing for diversity.
 
 By tuning temperature, top-k, and top-p, you can balance between deterministic and diverse outputs, tailoring the model's behavior to your specific needs.
 
-![alt text](LLM_theory_images/logit.png)
+![](LLM_theory_images/logit.png)
 
 [TOC](#table-of-contents)
 
-### 5.6. The original architecture
+#### 5.6.2. Managing Repetition: Keeping Output Fresh
+
+One common challenge with LLMs is their tendency to **repeat themselves**. To address this, we use two types of _penalties_:
+
+- **Presence Penalty**: A fixed penalty applied to any token that has appeared before, regardless of how often. This helps prevent the model from reusing the same words.
+
+- **Frequency Penalty**: A scaling penalty that increases based on how often a token has been used. The more a word appears, the less likely it is to be chosen again.
+
+![](LLM_theory_images/penality.png "Penality process")
+
+These penalties are applied early in the token selection process, adjusting the raw probabilities before other sampling strategies are applied. Think of them as gentle nudges encouraging the model to explore new vocabulary.
+
+#### 5.6.3. Controlling Generation Length: Setting Boundaries
+
+Just as a good story needs proper pacing and length, we need ways to control how much text our LLM generates. This is crucial for practical applications - whether we’re generating a tweet-length response or a full blog post.
+
+![](LLM_theory_images/beam_search.png "Beam Search Process")
+
+We can control generation length in several ways:
+
+- **Token Limits**: Setting minimum and maximum token counts
+- **Stop Sequences**: Defining specific patterns that signal the end of generation
+- **End-of-Sequence Detection**: Letting the model naturally conclude its response
+
+For example, if we want to generate a single paragraph, we might set a maximum of 100 tokens and use “\n\n” as a stop sequence. This ensures our output stays focused and appropriately sized for its purpose.
+
+[TOC](#table-of-contents)
+
+#### 5.6.4. Beam Search: Looking Ahead for Better Coherence
+
+While the strategies we’ve discussed so far make decisions one token at a time, beam search takes a more holistic approach. Instead of committing to a single choice at each step, it explores multiple possible paths simultaneously - like a chess player thinking several moves ahead.
+
+Here’s how it works:
+
+1. At each step, maintain multiple candidate sequences (typically 5-10)
+2. For each candidate, compute probabilities for the next token
+3. Keep only the most promising combinations of sequences and next tokens
+4. Continue this process until reaching the desired length or stop condition
+5. Select the sequence with the highest overall probability
+
+This approach often produces more coherent and grammatically correct text, though it requires more computational resources than simpler methods.
+
+### 5.7. The original architecture
 
 The Transformer architecture was originally designed for **translation**.
 
@@ -497,7 +555,45 @@ The original architecture looks like:
 
 [TOC](#table-of-contents)
 
-### 5.7. Types of Language Models
+### 5.8. Practical Challenges and Optimization
+
+As we wrap up our exploration of LLM inference, let’s look at the practical challenges you’ll face when deploying these models, and how to measure and optimize their performance.
+
+#### 5.8.1. Key Performance Metrics
+
+When working with LLMs, four critical metrics will shape your implementation decisions:
+
+1. **Time to First Token (TTFT):** How quickly can you get the first response? This is crucial for user experience and is primarily affected by the prefill phase.
+
+2. **Time Per Output Token (TPOT):** How fast can you generate subsequent tokens? This determines the overall generation speed.
+
+3. **Throughput:** How many requests can you handle simultaneously? This affects scaling and cost efficiency.
+
+4. **VRAM Usage:** How much GPU memory do you need? This often becomes the primary constraint in real-world applications.
+
+#### 5.8.2. The Context Length Challenge
+
+One of the most significant challenges in LLM inference is managing context length effectively. Longer contexts provide more information but come with substantial costs:
+
+- **Memory Usage:** Grows quadratically with context length
+- **Processing Speed:** Decreases linearly with longer contexts
+- **Resource Allocation:** Requires careful balancing of VRAM usage
+
+Recent models like Qwen2.5-1M offer impressive 1M token context windows, but this comes at the cost of significantly slower inference times. The key is finding the right balance for your specific use case.
+
+[TOC](#table-of-contents)
+
+#### 5.8.3. The KV Cache Optimization
+
+To address these challenges, one of the most powerful optimizations is KV (Key-Value) caching. This technique significantly improves inference speed by storing and reusing intermediate calculations. This optimization:
+
+- Reduces repeated calculations
+- Improves generation speed
+- Makes long-context generation practical
+
+The trade-off is additional memory usage, but the performance benefits usually far outweigh this cost.
+
+### 5.9. Types of Language Models
 
 In the Transformers library, language models generally fall into three architectural categories, depending on the task:
 
@@ -527,16 +623,16 @@ There are two main approaches for training a transformer model:
 
 [TOC](#table-of-contents)
 
-### 5.8. How Transformers solve tasks
+### 5.10. How Transformers solve tasks
 
 TODO:
 https://huggingface.co/learn/llm-course/chapter1/5
 
-### 5.9. BERT
+### 5.11. BERT
 
 TODO?
 
-### 5.10. Modern Large Language Models (LLMs)
+### 5.12. Modern Large Language Models (LLMs)
 
 GPT, LLAMA
 
@@ -553,7 +649,7 @@ Modern decoder-based LLMs have demonstrated impressive capabilities: Text genera
 
 [TOC](#table-of-contents)
 
-### 5.11. Sequence-to-sequence models
+### 5.13. Sequence-to-sequence models
 
 BART, T5
 
