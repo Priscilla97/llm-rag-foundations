@@ -5,13 +5,14 @@
 1. [Intro](#1-intro)
 
 1. [HuggingFace](#2-huggingface)
-
    1. [Componenti principali:](#21-componenti-principali)
 
 1. [Tokenizer](#3-tokenizer)
+   1. [Word-based](#31-word-based)
+   1. [Character-based](#32-character-based)
+   1. [Subword tokenization](#33-subword-tokenization)
 
 1. [Libreria "pipeline()"](#4-libreria-pipeline)
-
    1. [Different pipeline modalities](#41-different-pipeline-modalities)
 
 1. [Transformers](#5-transformers)
@@ -42,6 +43,13 @@
    1. [BERT](#511-bert)
    1. [Modern Large Language Models (LLMs)](#512-modern-large-language-models-llms)
    1. [Sequence-to-sequence models](#513-sequence-to-sequence-models)
+
+1. [Frameworks for optimizing LLM deployments](#6-frameworks-for-optimizing-llm-deployments)
+   1. [Memory Management and Performance](#61-memory-management-and-performance)
+      1. [TGI](#611-tgi)
+      1. [vLLM](#612-vllm)
+      1. [llama.cpp](#613-llamacpp)
+   1. [Deployment and Integration](#62-deployment-and-integration)
 
 <br>
 
@@ -108,6 +116,72 @@ Hugging Face fornisce:
 [TOC](#table-of-contents)
 
 ## 3. Tokenizer
+
+Tokenizers are one of the core components of the NLP pipeline.
+
+They serve one purpose: to **translate text into data that can be processed by the model**. Models can only process numbers, so tokenizers need to convert our text inputs to numerical data.
+
+In NLP tasks, the data that is generally processed is raw text. Here’s an example of such text:
+
+TEXT:
+Jim Henson was a puppeteer
+
+The goal is to find the **most meaningful representation** — that is, the one that makes the most _sense to the model_ — and _the smallest representation._
+
+### 3.1. Word-based
+
+**Word-based**: split the raw text into words and find a numerical representation for each of them <br>
+_['Jim', 'Henson', 'was', 'a', 'puppeteer']_
+
+If we want to completely cover a language we’ll need to have an identifier for each word in the language, take over 500,000 words in the English language!
+
+Words like “dog” are represented differently from words like “dogs”, and the model will initially have no way of knowing that “dog” and “dogs” are similar.
+
+We also need a custom token to represent words that are **not in our vocabulary**.
+This is known as the “unknown” token, often represented as ”[UNK]” or ”<unk>”. It’s generally a bad sign if you see that the tokenizer is producing a lot of these tokens.
+
+One way to reduce the amount of unknown tokens is to go one level deeper, using a **character-based tokenizer**.
+
+[TOC](#table-of-contents)
+
+### 3.2. Character-based
+
+Character-based tokenizers split the text into characters, rather than words. This has two primary benefits:
+
+- The vocabulary is much smaller.
+- There are much fewer out-of-vocabulary (unknown) tokens, since every word can be built from characters.
+
+This approach isn’t perfect either. Since the representation is now based on characters rather than words, it’s less meaningful: each character doesn’t mean a lot on its own.
+
+To get the best of both worlds, we can use a third technique that combines the two approaches: **subword tokenization**.
+
+### 3.3. Subword tokenization
+
+**Subword tokenization** algorithms rely on the principle that **frequently used words should not be split into smaller subwords**, but rare words should be decomposed into meaningful subwords.
+
+EXAMPLE: <br>
+**“annoyingly”**: a rare word and could be decomposed into
+
+- “annoying”
+- “ly”.
+
+These are both likely to appear more frequently as standalone subwords.
+
+Here is an example showing how a subword tokenization algorithm would tokenize the sequence “**Let’s do tokenization**!“:
+
+- Let's < /w>
+- do < /w>
+- token
+- ization < /w>
+- ! < /w>
+
+“tokenization” was split into “token” and “ization”, two tokens that have a semantic meaning while being space-efficient. This allows us to have relatively good coverage with small vocabularies, and close to no unknown tokens.
+
+Unsurprisingly, there are **many more techniques** out there. To name a few:
+
+- Byte-level BPE, as used in GPT-2
+- WordPiece, as used in BERT
+- SentencePiece or Unigram, as used in several multilingual models
 
 [TOC](#table-of-contents)
 
@@ -665,3 +739,146 @@ Sequence-to-sequence models are best suited for tasks revolving around **generat
 
 Some practical applications include: Machine translation,
 Text summarization, Data-to-text generation, Grammar correction and Question answering.
+
+[TOC](#table-of-contents)
+
+## 6. Frameworks for optimizing LLM deployments
+
+Link: https://huggingface.co/learn/llm-course/chapter2/8
+
+LLMs (Large Language Models) like LLaMA, GPT, or Mistral are Transformer neural networks trained to predict the next token in a sequence. <br>
+By themselves, LLMs are just models: they don’t handle users, APIs, or performance efficiently.
+
+This is where TGI, vLLM, and llama.cpp come in.
+
+Text Generation Inference (TGI), vLLM, and llama.cpp are **advanced frameworks** for _optimizing LLM deployments_.
+
+**They are inference engines / servers for LLMs.**
+
+They do not train models and do not change the model architecture.
+Instead, they focus on running LLMs efficiently.
+
+They:
+
+- Load a pre-trained LLM into memory
+
+- Run the inference process (token-by-token generation)
+
+- Optimize speed, memory usage, and concurrency
+
+- Expose the model through an API or server
+
+So they make LLMs usable in real applications.
+
+![](LLM_theory_images/deployment.png)
+
+They serve similar purposes but have distinct characteristics that make them better suited for different use cases.
+
+[TOC](#table-of-contents)
+
+### 6.1. Memory Management and Performance
+
+#### 6.1.1. TGI
+
+- is designed to be stable and predictable in production,
+- using fixed sequence lengths to keep memory usage consistent.
+- manages memory using **Flash Attention 2**
+- continuous batching techniques.
+
+This means it can process **attention calculations very efficiently** and keep the GPU busy by constantly feeding it work. **The system can move parts of the model between CPU and GPU when needed,** which helps handle larger models.
+
+![](LLM_theory_images/flash_attention.png)
+
+**Flash Attention** is a technique that optimizes the attention mechanism in transformer models by _addressing memory bandwidth bottlenecks_. The attention mechanism has quadratic complexity and memory usage, making it inefficient for long sequences.
+
+The _key innovation_ is in
+
+- how it manages memory transfers between High Bandwidth Memory (HBM)
+- faster SRAM cache.
+
+**Traditional attention** _repeatedly_ transfers data between HBM and SRAM, creating bottlenecks by leaving the GPU idle.
+
+**Flash Attention** loads data once into SRAM and performs all calculations there, minimizing expensive memory transfers.
+
+**Flash Attention’s reduced VRAM usage and improved efficiency make it valuable for inference as well, enabling faster and more scalable LLM serving**.
+
+[TOC](#table-of-contents)
+
+#### 6.1.2. vLLM
+
+- use **PagedAttention**.
+- manages its memory in **pages**,
+- vLLM splits the model’s memory into smaller blocks.
+- means it can handle different-sized requests more flexibly and doesn’t waste memory space.
+
+It’s particularly good at sharing memory between different requests and reduces memory fragmentation, which makes the whole system more efficient.
+
+**PagedAttention** is a technique that addresses another critical bottleneck in LLM inference: KV cache memory management.
+
+During text generation, the model stores attention keys and values (KV cache) for each generated token to reduce redundant computations. The KV cache can become enormous, especially with long sequences or multiple concurrent requests.
+
+vLLM’s key innovation lies in how it manages this cache:
+
+- **Memory Paging**: KV cache is divided into fixed-size “pages” (similar to virtual memory in operating systems).
+
+- **Non-contiguous Storage**: Pages don’t need to be stored contiguously in GPU memory, allowing for more flexible memory allocation.
+
+- **Page Table Management**: A page table tracks which pages belong to which sequence, enabling efficient lookup and access.
+
+- **Memory Sharing**: For operations like parallel sampling, pages storing the KV cache for the prompt can be shared across multiple sequences.
+
+The PagedAttention approach can lead to up to 24x higher throughput compared to traditional methods, making it a game-changer for production LLM deployments.
+
+[TOC](#table-of-contents)
+
+#### 6.1.3. llama.cpp
+
+- is optimized C/C++ implementation originally designed for running LLaMA models on consumer hardware.
+- It focuses on **CPU efficiency** with optional GPU acceleration and is ideal for resource-constrained environments.
+- uses **quantization techniques** to reduce model size and memory requirements while maintaining good performance.
+
+It implements optimized kernels for various CPU architectures and supports basic KV cache management for efficient token generation.
+
+**Quantization** in llama.cpp reduces the precision of model weights from 32-bit floating point to lower precision formats like 8-bit integers (INT8), or lower. This significantly reduces memory usage and improves inference speed with minimal quality loss.
+
+Key quantization features in llama.cpp include:
+
+- **Multiple Quantization Levels**: Supports 8-bit, 4-bit, 3-bit, and even 2-bit quantization
+- **GGML/GGUF Format**: Uses custom tensor formats optimized for quantized inference
+- **Mixed Precision**: Can apply different quantization levels to different parts of the model
+- **Hardware-Specific Optimizations**: Includes optimized code paths for various CPU architectures (AVX2, AVX-512, NEON)
+
+This approach enables running billion-parameter models on consumer hardware with limited memory, making it perfect for local deployments and edge devices.
+
+### 6.2. Deployment and Integration
+
+Let’s move on to the deployment and integration differences between the frameworks.
+
+**TGI** excels in _enterprise-level deployment_ with its production-ready features.
+
+- It comes with built-in Kubernetes support
+- includes everything you need for running in production
+- includes enterprise-grade logging and various protective measures like content filtering and rate limiting to keep your deployment secure and stable.
+
+**vLLM** takes a more flexible, developer-friendly approach to deployment.
+
+- It’s built with Python at its core and
+- can easily replace OpenAI’s API in your existing applications.
+- The framework focuses on delivering raw performance
+- can be customized to fit your specific needs.
+- It works particularly well with Ray for managing clusters, making it a great choice when you need high performance and adaptability.
+
+**llama.cpp** prioritizes simplicity and portability.
+
+- Its server implementation is lightweight
+- can run on a wide range of hardware, from powerful servers to consumer laptops.
+- With minimal dependencies and a simple C/C++ core, it’s easy to deploy in environments where installing Python frameworks would be challenging.
+- The server provides an OpenAI-compatible API while maintaining a much smaller resource footprint than other solutions.
+
+Main differences (very briefly)
+
+- **TGI**: production-ready, stable, used for large-scale deployment
+
+- **vLLM**: extremely fast, optimized for high throughput
+
+- **llama.cpp**: lightweight, runs on CPU, good for local/offline use
